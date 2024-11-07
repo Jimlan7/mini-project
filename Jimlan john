@@ -1,0 +1,980 @@
+AdminPanel
+import javafx.geometry.Insets;
+import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
+
+import java.io.File;
+
+public class AdminPanel extends GridPane {
+    private MovieTicketBookingApp app;
+    private TextField titleField, synopsisField, seatAvailabilityField;
+    private ListView<String> movieListView;
+    private ImageView posterImageView;
+    private String posterPath;
+    private Button updateButton, editButton, deleteButton;
+
+    public AdminPanel(MovieTicketBookingApp app) {
+        this.app = app;
+        setupUI();
+        loadMovies(); // Load movies when creating the AdminPanel
+        setupFieldListeners(); // Add listeners to disable buttons based on input
+    }
+
+    private void setupUI() {
+        // Labels
+        Label titleLabel = new Label("Movie Title:");
+        titleField = new TextField();
+        titleField.setPrefWidth(200); // Set preferred width for title field
+
+        Label synopsisLabel = new Label("Synopsis:");
+        synopsisField = new TextField();
+        synopsisField.setPrefWidth(200); // Set preferred width for synopsis field
+
+        Label seatLabel = new Label("Seat Availability:");
+        seatAvailabilityField = new TextField();
+        seatAvailabilityField.setPrefWidth(200); // Set preferred width for seat availability field
+
+        // Buttons
+        Button addButton = new Button("Add Movie");
+        addButton.setOnAction(e -> addMovie());
+
+        editButton = new Button("Edit Selected Movie");
+        editButton.setDisable(true);
+        editButton.setOnAction(e -> editSelectedMovie());
+
+        updateButton = new Button("Update Movie");
+        updateButton.setVisible(false);
+        updateButton.setDisable(true);
+        updateButton.setOnAction(e -> updateMovie());
+
+        deleteButton = new Button("Delete Selected Movie");
+        deleteButton.setDisable(true);
+        deleteButton.setOnAction(e -> deleteSelectedMovie());
+
+        Button uploadPosterButton = new Button("Upload Poster");
+        uploadPosterButton.setOnAction(e -> uploadPoster());
+
+        Button backButton = new Button("Go Back");
+        backButton.setOnAction(e -> app.showLoginPanel());
+
+        movieListView = new ListView<>();
+
+        // Dynamic ImageView with responsive resizing
+        posterImageView = new ImageView();
+        posterImageView.setPreserveRatio(true);
+        posterImageView.fitWidthProperty().bind(this.widthProperty().divide(3)); // Fit dynamically
+        posterImageView.fitHeightProperty().bind(this.heightProperty().divide(2));
+
+        // Layout settings for GridPane
+        GridPane.setHgrow(titleField, Priority.ALWAYS);
+        GridPane.setHgrow(synopsisField, Priority.ALWAYS);
+        GridPane.setHgrow(seatAvailabilityField, Priority.ALWAYS);
+        GridPane.setVgrow(movieListView, Priority.ALWAYS);
+
+        // Add controls to the GridPane layout
+        add(titleLabel, 0, 0);
+        add(titleField, 1, 0, 2, 1);
+        add(synopsisLabel, 0, 1);
+        add(synopsisField, 1, 1, 2, 1);
+        add(seatLabel, 0, 2);
+        add(seatAvailabilityField, 1, 2, 2, 1);
+        add(uploadPosterButton, 0, 3);
+        add(addButton, 1, 3);
+        add(editButton, 2, 3);
+        add(updateButton, 3, 3);
+        add(deleteButton, 4, 3);
+        add(backButton, 0, 4);
+        add(movieListView, 0, 5, 5, 1);
+        add(posterImageView, 5, 0, 1, 6); // Dynamically adjust poster size
+
+        // GridPane spacing
+        setVgap(10);
+        setHgap(10);
+        setPadding(new Insets(10));
+
+        // Set preferred widths to balance space usage
+        setPrefWidth(800); // Set a preferred width for the panel
+    }
+
+    private void loadMovies() {
+        movieListView.getItems().clear();
+        for (Movie movie : app.getMovieList()) {
+            movieListView.getItems().add(movie.getTitle()); // Show only titles
+        }
+
+        // Disable buttons initially
+        editButton.setDisable(true);
+        deleteButton.setDisable(true);
+        updateButton.setVisible(false);
+
+        // Enable edit, delete when a movie is selected
+        movieListView.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
+            if (newSelection != null) {
+                editButton.setDisable(false);
+                deleteButton.setDisable(false);
+            } else {
+                editButton.setDisable(true);
+                deleteButton.setDisable(true);
+                updateButton.setVisible(false);
+            }
+        });
+    }
+
+    private void setupFieldListeners() {
+        titleField.textProperty().addListener((obs, oldText, newText) -> checkFormValid());
+        synopsisField.textProperty().addListener((obs, oldText, newText) -> checkFormValid());
+        seatAvailabilityField.textProperty().addListener((obs, oldText, newText) -> checkFormValid());
+    }
+
+    private void checkFormValid() {
+        boolean allFieldsFilled = !titleField.getText().isEmpty() && !synopsisField.getText().isEmpty() && !seatAvailabilityField.getText().isEmpty();
+        updateButton.setDisable(!allFieldsFilled);
+    }
+
+    private void uploadPoster() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.gif"));
+        File selectedFile = fileChooser.showOpenDialog(app.getPrimaryStage());
+        if (selectedFile != null) {
+            posterPath = selectedFile.toURI().toString();
+            Image image = new Image(posterPath);
+            posterImageView.setImage(image);
+        } else {
+            showAlert("Error", "No file selected.");
+        }
+    }
+
+    private void addMovie() {
+        String title = titleField.getText();
+        String synopsis = synopsisField.getText();
+        String seatsStr = seatAvailabilityField.getText();
+
+        // Validate and add movie logic
+        if (!title.isEmpty() && !synopsis.isEmpty() && !seatsStr.isEmpty() && posterPath != null) {
+            try {
+                int seats = Integer.parseInt(seatsStr); // Convert seat availability to integer
+                Movie movie = new Movie(title, synopsis, seats); // Create the movie object
+                movie.setPosterPath(posterPath); // Set the poster path
+                app.getMovieList().add(movie); // Add the movie to the application's list
+                movieListView.getItems().add(movie.getTitle()); // Display only the title for now
+                clearFields();
+                showAlert("Success", "Movie added successfully."); // User feedback for successful addition
+            } catch (NumberFormatException e) {
+                showAlert("Error", "Please enter a valid number for seat availability.");
+            }
+        } else {
+            showAlert("Error", "Please fill all fields and upload a poster.");
+        }
+    }
+
+    private void editSelectedMovie() {
+        String selectedMovieTitle = movieListView.getSelectionModel().getSelectedItem();
+        if (selectedMovieTitle != null) {
+            Movie movie = findMovieByTitle(selectedMovieTitle);
+            if (movie != null) {
+                titleField.setText(movie.getTitle());
+                synopsisField.setText(movie.getInfo());
+                seatAvailabilityField.setText(String.valueOf(movie.getSeatsAvailable())); // Populate seat availability
+                posterPath = movie.getPosterPath(); // Load the existing poster path
+                posterImageView.setImage(new Image(posterPath));
+
+                updateButton.setVisible(true); // Show update button when editing
+            }
+        } else {
+            showAlert("Error", "Please select a movie to edit.");
+        }
+    }
+
+    private void updateMovie() {
+        String selectedMovieTitle = movieListView.getSelectionModel().getSelectedItem();
+        if (selectedMovieTitle != null) {
+            Movie movie = findMovieByTitle(selectedMovieTitle);
+            if (movie != null) {
+                String title = titleField.getText();
+                String synopsis = synopsisField.getText();
+                String seatsStr = seatAvailabilityField.getText();
+
+                // Validate updated values
+                if (!title.isEmpty() && !synopsis.isEmpty() && !seatsStr.isEmpty()) {
+                    try {
+                        int seats = Integer.parseInt(seatsStr);
+                        // Update movie details
+                        movie.setPosterPath(posterPath); // Update poster path if changed
+                        movie.setTitle(title);
+                        movie.setInfo(synopsis);
+                        movie.setSeatsAvailable(seats);
+
+                        // Refresh the movie list view
+                        loadMovies();
+                        clearFields();
+                        updateButton.setVisible(false); // Hide update button after updating
+                        showAlert("Success", "Movie updated successfully."); // User feedback for successful update
+                    } catch (NumberFormatException e) {
+                        showAlert("Error", "Please enter a valid number for seat availability.");
+                    }
+                } else {
+                    showAlert("Error", "Please fill all fields.");
+                }
+            }
+        }
+    }
+
+    private void deleteSelectedMovie() {
+        String selectedMovieTitle = movieListView.getSelectionModel().getSelectedItem();
+        if (selectedMovieTitle != null) {
+            Movie movie = findMovieByTitle(selectedMovieTitle);
+            if (movie != null) {
+                app.getMovieList().remove(movie); // Remove the movie from the list
+                loadMovies(); // Refresh the movie list view
+                showAlert("Success", "Movie deleted successfully."); // User feedback for successful deletion
+            }
+        } else {
+            showAlert("Error", "Please select a movie to delete.");
+        }
+    }
+
+    private Movie findMovieByTitle(String title) {
+        for (Movie movie : app.getMovieList()) {
+            if (movie.getTitle().equals(title)) {
+                return movie;
+            }
+        }
+        return null; // Movie not found
+    }
+
+    private void clearFields() {
+        titleField.clear();
+        synopsisField.clear();
+        seatAvailabilityField.clear();
+        posterImageView.setImage(null); // Clear the displayed image
+        posterPath = null; // Reset poster path
+    }
+
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+}
+Booking	
+import java.util.HashSet;
+import java.util.Set;
+
+public class Booking {
+    private Movie movie;
+    private String timing;
+    private Set<Integer> bookedSeats;
+
+    public Booking(Movie movie, String timing, Set<Integer> bookedSeats) {
+        this.movie = movie;
+        this.timing = timing;
+        this.bookedSeats = new HashSet<>(bookedSeats); // Ensure bookedSeats is a copy to maintain immutability
+    }
+
+    // Getters
+    public Movie getMovie() {
+        return movie;
+    }
+
+    public String getTiming() {
+        return timing;
+    }
+
+    public Set<Integer> getBookedSeats() {
+        return new HashSet<>(bookedSeats); // Return a copy of bookedSeats
+    }
+
+    // Method to add a booked seat
+    public boolean addBookedSeat(int seatNumber) {
+        return bookedSeats.add(seatNumber); // Adds the seat if it was not already booked
+    }
+
+    // Override toString for better debugging
+    @Override
+    public String toString() {
+        return "Booking{" +
+                "movie=" + movie.getTitle() + // Assuming Movie class has getTitle method
+                ", timing='" + timing + '\'' +
+                ", bookedSeats=" + bookedSeats +
+                '}';
+    }
+}
+BookingSummaryPanel
+import javafx.geometry.Insets;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.text.Text;
+
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+public class BookingSummaryPanel extends VBox {
+    private MovieTicketBookingApp app;
+    private List<Booking> bookings;
+
+    public BookingSummaryPanel(MovieTicketBookingApp app, List<Booking> bookings) {
+        this.app = app;
+        this.bookings = bookings;
+        initializeUI();
+    }
+
+    private void initializeUI() {
+        setPadding(new Insets(20));
+        setSpacing(15);
+
+        Text header = new Text("Your Bookings");
+        header.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #333;");
+        getChildren().add(header);
+
+        if (bookings.isEmpty()) {
+            showAlert("No Bookings", "You have not made any bookings yet.");
+            addBackButton();
+            return;
+        }
+
+        GridPane bookingGrid = createBookingGrid();
+
+        int row = 0;
+        for (Booking booking : bookings) {
+            addBookingToGrid(bookingGrid, booking, row);
+            row++;
+        }
+
+        getChildren().add(bookingGrid);
+        addBackButton();
+    }
+
+    private GridPane createBookingGrid() {
+        GridPane bookingGrid = new GridPane();
+        bookingGrid.setPadding(new Insets(10));
+        bookingGrid.setHgap(10);
+        bookingGrid.setVgap(10);
+        bookingGrid.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #ccc; -fx-border-radius: 5; -fx-background-radius: 5;");
+        return bookingGrid;
+    }
+
+    private void addBookingToGrid(GridPane bookingGrid, Booking booking, int row) {
+        ImageView posterImageView = new ImageView(new Image(booking.getMovie().getPosterPath()));
+        posterImageView.setFitHeight(150);
+        posterImageView.setFitWidth(100);
+        posterImageView.setPreserveRatio(true);
+
+        Text bookingInfo = new Text("Movie: " + booking.getMovie().getTitle() +
+                "\nTiming: " + booking.getTiming() +
+                "\nSeats: " + bookedSeatsToString(booking.getBookedSeats()));
+
+        Button cancelButton = new Button("Cancel");
+        cancelButton.setOnAction(e -> confirmCancelBooking(booking));
+
+        bookingGrid.add(posterImageView, 0, row);
+        bookingGrid.add(bookingInfo, 1, row);
+        bookingGrid.add(cancelButton, 2, row);
+    }
+
+    private void confirmCancelBooking(Booking booking) {
+        Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
+        confirmation.setTitle("Confirm Cancellation");
+        confirmation.setContentText("Are you sure you want to cancel your booking for " + booking.getMovie().getTitle() + "?");
+        confirmation.showAndWait().ifPresent(response -> {
+            if (response == ButtonType.OK) {
+                cancelBooking(booking);
+            }
+        });
+    }
+
+    private String bookedSeatsToString(Set<Integer> bookedSeats) {
+        return bookedSeats.stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(", "));
+    }
+
+    private void cancelBooking(Booking booking) {
+        bookings.remove(booking);
+        for (int seat : booking.getBookedSeats()) {
+            booking.getMovie().removeBookedSeat(seat); // Ensure this method exists in the Movie class
+        }
+
+        showAlert("Booking Cancelled", "Your booking for " + booking.getMovie().getTitle() + " has been cancelled.");
+        app.getPrimaryStage().getScene().setRoot(new BookingSummaryPanel(app, bookings)); // Refresh the panel
+    }
+
+    private void addBackButton() {
+        Button backButton = new Button("Back to Movies");
+        backButton.setOnAction(e -> app.getPrimaryStage().getScene().setRoot(new CustomerPanel(app)));
+        getChildren().add(backButton);
+    }
+
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+}
+CustomerPanel
+import javafx.geometry.Insets;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import javafx.scene.text.Text;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class CustomerPanel extends GridPane {
+    private MovieTicketBookingApp app;
+    private List<Movie> movies;
+    private List<Booking> bookings; // New list to track bookings
+
+    public CustomerPanel(MovieTicketBookingApp app) {
+        this.app = app;
+        this.movies = app.getMovieList();
+        this.bookings = new ArrayList<>(); // Initialize the bookings list
+        initializeUI();
+    }
+    private void initializeUI() {
+        // Clear the previous layout
+        getChildren().clear();
+        setPadding(new Insets(10));
+        setVgap(20); // Set vertical gap between rows
+        setHgap(20); // Set horizontal gap between columns
+
+        // Display movies in a grid
+        int cols = 3; // Number of columns for the movie posters
+        for (int i = 0; i < movies.size(); i++) {
+            Movie movie = movies.get(i);
+            VBox movieBox = createMovieBox(movie);
+            add(movieBox, i % cols, i / cols); // Position movie boxes in grid
+        }
+
+        // Create an HBox for the buttons to ensure they are at the bottom
+        HBox buttonBox = new HBox(10); // Spacing between buttons
+        buttonBox.setPadding(new Insets(20, 0, 0, 0)); // Add some padding to the top
+
+        // Button to go back to the login panel
+        Button backButton = new Button("Go Back");
+        backButton.setOnAction(e -> app.showLoginPanel()); // Implement this method to show the login panel
+
+        // Button to view bookings
+        Button viewBookingsButton = new Button("View Bookings");
+        viewBookingsButton.setOnAction(e -> viewAllBookings()); // Action for view bookings
+
+        buttonBox.getChildren().addAll(backButton, viewBookingsButton); // Add buttons to buttonBox
+        buttonBox.setStyle("-fx-alignment: center; -fx-hgrow: always;"); // Center align HBox and allow spacing
+
+        // Add buttonBox at the bottom of the grid
+        add(buttonBox, 0, (movies.size() / cols) + 1, cols, 1); // Span the buttons across all columns
+    }
+
+    private VBox createMovieBox(Movie movie) {
+        ImageView posterImageView = new ImageView();
+        posterImageView.setImage(new Image(movie.getPosterPath())); // Assume Movie class has a method for poster path
+        posterImageView.setFitHeight(200); // Set desired height
+        posterImageView.setFitWidth(150); // Set a fixed width for uniformity
+        posterImageView.setPreserveRatio(true);
+
+        Text titleLabel = new Text(movie.getTitle());
+        titleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;"); // Style for the title
+
+        // Button to book tickets
+        Button bookTicketButton = new Button("Book Ticket");
+        bookTicketButton.setOnAction(e -> app.showMovieDetailPanel(movie)); // Navigate to the movie detail panel
+
+        VBox movieBox = new VBox(posterImageView, titleLabel, bookTicketButton);
+        movieBox.setSpacing(5);
+        movieBox.setStyle("-fx-alignment: center;"); // Center align VBox
+
+        return movieBox;
+    }
+
+    private void viewAllBookings() {
+        // Create a new panel to show bookings
+        BookingSummaryPanel bookingSummaryPanel = new BookingSummaryPanel(app, bookings);
+        app.getPrimaryStage().getScene().setRoot(bookingSummaryPanel); // Switch to the booking summary panel
+    }
+
+    private void showAlert(String title, String message) {
+        // Implement an alert to show messages to the user
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+    public void addBooking(Booking booking) {
+        bookings.add(booking);
+    }
+
+}
+
+
+LoginPanel
+import javafx.geometry.Pos;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.GridPane;
+import javafx.scene.paint.Color;
+
+public class LoginPanel extends GridPane {
+    private MovieTicketBookingApp app;
+    private TextField usernameField;
+    private PasswordField passwordField;
+    private Label errorLabel;
+
+    public LoginPanel(MovieTicketBookingApp app) {
+        this.app = app;
+        initializeUI();
+    }
+
+    private void initializeUI() {
+        // Set padding and spacing
+        setPadding(new javafx.geometry.Insets(40));
+        setHgap(15);
+        setVgap(15);
+
+        // Set a clean white background
+        setStyle("-fx-background-color: white;"); // White background for a clean look
+
+        // Set alignment to center
+        setAlignment(Pos.CENTER);
+
+        // Initialize UI components
+        usernameField = new TextField();
+        passwordField = new PasswordField();
+        Button loginButton = new Button("Login");
+        errorLabel = new Label();
+
+        // Style the button with shadow and rounded corners
+        loginButton.setStyle(
+                "-fx-background-color: #007bff; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-padding: 10 20; " +
+                        "-fx-font-size: 14px; " +
+                        "-fx-background-radius: 20; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 5, 0, 0, 1);"
+        );
+
+        // Style input fields with soft borders and shadows
+        usernameField.setStyle(
+                "-fx-background-color: white; " +
+                        "-fx-border-color: #007bff; " +
+                        "-fx-border-radius: 10; " +
+                        "-fx-padding: 10;" +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 5, 0, 0, 1);"
+        );
+
+        passwordField.setStyle(
+                "-fx-background-color: white; " +
+                        "-fx-border-color: #007bff; " +
+                        "-fx-border-radius: 10; " +
+                        "-fx-padding: 10;" +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 5, 0, 0, 1);"
+        );
+
+        // Style error label
+        errorLabel.setTextFill(Color.RED);
+
+        // Add hover effect for button
+        loginButton.setOnMouseEntered(e -> loginButton.setStyle(
+                "-fx-background-color: #0056b3; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 10 20;" + // Maintain padding on hover
+                        "-fx-background-radius: 20;"
+        ));
+
+        loginButton.setOnMouseExited(e -> loginButton.setStyle(
+                "-fx-background-color: #007bff; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 10 20;" + // Maintain padding on exit
+                        "-fx-background-radius: 20;"
+        ));
+
+        loginButton.setOnAction(e -> handleLogin());
+
+        // Add components to the grid
+        add(new Label("Username:"), 0, 0);
+        add(usernameField, 1, 0);
+        add(new Label("Password:"), 0, 1);
+        add(passwordField, 1, 1);
+        add(loginButton, 1, 2);
+        add(errorLabel, 1, 3);
+    }
+
+    private void handleLogin() {
+        String username = usernameField.getText();
+        String password = passwordField.getText();
+
+        // Simple username/password check (you can replace this with your own logic)
+        if (username.equals("admin") && password.equals("admin123")) {
+            app.showAdminPanel();
+        } else if (username.equals("customer") && password.equals("customer123")) {
+            app.showCustomerPanel();
+        } else {
+            errorLabel.setText("Invalid credentials, please try again.");
+        }
+    }
+}
+
+Movie
+import java.util.HashSet;
+import java.util.Set;
+
+public class Movie {
+    private String title;
+    private String info;
+    private int seatsAvailable;
+    private String posterPath; // Added to store the path of the movie poster
+    private Set<Integer> bookedSeats; // Added to track booked seats
+
+    public Movie(String title, String info, int seatsAvailable) {
+        this.title = title;
+        this.info = info;
+        this.seatsAvailable = seatsAvailable;
+        this.bookedSeats = new HashSet<>(); // Initialize booked seats
+    }
+
+    // Getter methods
+    public String getTitle() { return title; }
+    public String getInfo() { return info; }
+    public int getSeatsAvailable() { return seatsAvailable; }
+    public String getPosterPath() { return posterPath; }
+    public Set<Integer> getBookedSeats() { return bookedSeats; } // Getter for booked seats
+
+    // Setter methods
+    public void setTitle(String title) { this.title = title; }
+    public void setInfo(String info) { this.info = info; }
+    public void setSeatsAvailable(int seatsAvailable) { this.seatsAvailable = seatsAvailable; }
+    public void setPosterPath(String posterPath) { this.posterPath = posterPath; }
+
+    // Method to add booked seat
+    public void addBookedSeat(int seatNumber) {
+        bookedSeats.add(seatNumber);
+    }
+
+    // Method to remove booked seat
+    public void removeBookedSeat(int seatNumber) {
+        bookedSeats.remove(seatNumber);
+    }
+}
+
+
+
+MovieDetailPanel
+import javafx.geometry.Insets;
+import javafx.scene.control.Button;
+import javafx.scene.control.Tooltip;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import javafx.scene.text.Text;
+import javafx.scene.control.ScrollPane;
+
+import java.util.Arrays;
+import java.util.List;
+
+public class MovieDetailPanel extends BorderPane {
+    private MovieTicketBookingApp app;
+    private Movie movie;
+
+    public MovieDetailPanel(MovieTicketBookingApp app, Movie movie) {
+        this.app = app;
+        this.movie = movie;
+
+        // Create ImageView for movie poster
+        ImageView posterImageView = new ImageView(new Image(movie.getPosterPath()));
+        posterImageView.setFitHeight(300);
+        posterImageView.setFitWidth(200);
+        posterImageView.setPreserveRatio(true);
+
+        // Create Text for movie title
+        Text titleText = new Text(movie.getTitle());
+        titleText.setStyle("-fx-font-weight: bold; -fx-font-size: 20px; -fx-text-fill: #333;"); // Style for title
+
+        // Create a ScrollPane for synopsis text
+        Text synopsisText = new Text(movie.getInfo());
+        synopsisText.setWrappingWidth(300); // Wrap synopsis text to fit the layout
+        ScrollPane synopsisScrollPane = new ScrollPane(synopsisText);
+        synopsisScrollPane.setPrefHeight(100); // Set a preferred height
+        synopsisScrollPane.setFitToWidth(true); // Allow it to fit the width
+
+        // Create a GridPane for timings
+        GridPane timingGrid = new GridPane();
+        timingGrid.setHgap(10); // Horizontal gap between buttons
+        timingGrid.setVgap(10); // Vertical gap between rows
+        timingGrid.setPadding(new Insets(10)); // Padding around the grid
+
+        List<String> timings = Arrays.asList("10:00 AM", "01:00 PM", "04:00 PM", "07:00 PM");
+        int row = 0, col = 0; // Row and column counters for grid layout
+
+        for (String timing : timings) {
+            Button timingButton = new Button(timing);
+            timingButton.setMinWidth(100); // Set a minimum width for the buttons
+            timingButton.setMinHeight(50); // Set a minimum height for the buttons
+            timingButton.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-size: 14px;"); // Button styles
+            timingButton.setOnAction(e -> showSeatSelection(timing));
+
+            // Add tooltip for clarity
+            Tooltip tooltip = new Tooltip("Select this timing");
+            Tooltip.install(timingButton, tooltip);
+
+            timingGrid.add(timingButton, col, row);
+
+            col++;
+            if (col == 2) { // Move to the next row after two buttons
+                col = 0;
+                row++;
+            }
+        }
+
+        // Create a VBox for the details and timings
+        VBox detailsBox = new VBox(titleText, synopsisScrollPane, timingGrid);
+        detailsBox.setSpacing(10); // Add spacing between title, synopsis, and timings
+        detailsBox.setPadding(new Insets(10)); // Add padding around the details
+
+        // Create an HBox to hold the poster and details side by side
+        HBox mainLayout = new HBox(posterImageView, detailsBox);
+        mainLayout.setSpacing(20); // Spacing between poster and details
+
+        // Set the HBox to the center of the BorderPane
+        setCenter(mainLayout);
+        setPadding(new Insets(10)); // Optional: Add padding to the overall panel
+        setStyle("-fx-background-color: #f8f8f8;"); // Set a light background color
+    }
+
+    private void showSeatSelection(String timing) {
+        // Create a new SeatSelectionPanel with the selected timing
+        SeatSelectionPanel seatSelectionPanel = new SeatSelectionPanel(app, movie, timing);
+        app.getPrimaryStage().getScene().setRoot(seatSelectionPanel); // Switch to the SeatSelectionPanel
+    }
+}
+
+
+MovieTicketBookingApp
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.stage.Stage;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class MovieTicketBookingApp extends Application {
+    private Stage primaryStage;
+    private LoginPanel loginPanel;
+    private AdminPanel adminPanel;  // Existing instance variable
+    private CustomerPanel customerPanel; // Existing instance variable
+
+
+    // New: List to hold movies
+    private List<Movie> movieList = new ArrayList<>();
+
+    @Override
+    public void start(Stage primaryStage) {
+        this.primaryStage = primaryStage;
+        loginPanel = new LoginPanel(this);
+
+        // Create a scene with the login panel and set it to the primary stage
+        Scene scene = new Scene(loginPanel, 800, 600);
+        primaryStage.setScene(scene);  // Ensure this line is present
+        primaryStage.setTitle("Movie Ticket Booking System");
+        primaryStage.show();  // This shows the primary stage
+    }
+
+    public Stage getPrimaryStage() {
+        return primaryStage; // Return the primary stage
+    }
+
+    // New method to get the list of movies
+    public List<Movie> getMovieList() {
+        return movieList;
+    }
+
+    public void showAdminPanel() {
+        // Always create a new instance if returning to Admin Panel
+        adminPanel = new AdminPanel(this); // New instance
+        Scene scene = new Scene(adminPanel, 800, 600);
+        primaryStage.setScene(scene);
+    }
+
+    public void showCustomerPanel() {
+        // Always create a new instance if returning to Customer Panel
+        customerPanel = new CustomerPanel(this);
+        Scene scene = new Scene(customerPanel, 800, 600);
+        primaryStage.setScene(scene);
+    }
+
+    public void showLoginPanel() {
+        // Always create a new instance if returning to Login Panel
+        loginPanel = new LoginPanel(this);
+        Scene scene = new Scene(loginPanel, 800, 600);
+        primaryStage.setScene(scene);
+    }
+
+    public void showMovieDetailPanel(Movie movie) {
+        // Create a new instance of MovieDetailPanel and pass the application instance
+        MovieDetailPanel detailPanel = new MovieDetailPanel(this, movie);
+
+        // Set the detailPanel in your main layout
+        Scene scene = new Scene(detailPanel, 800, 600);
+        primaryStage.setScene(scene); // Set the new scene to the primary stage
+    }
+    public MovieTicketBookingApp() {
+        // Initialize components including customerPanel
+        customerPanel = new CustomerPanel(this); // Adjust based on your actual setup
+    }
+
+    public CustomerPanel getCustomerPanel() {
+        return customerPanel; // Return the instance of CustomerPanel
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}
+
+SeatSelectionPanel
+import javafx.geometry.Insets;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.layout.GridPane;
+import javafx.scene.text.Text;
+
+import java.util.HashSet;
+import java.util.Set;
+
+public class SeatSelectionPanel extends GridPane {
+    private MovieTicketBookingApp app;
+    private Movie movie;
+    private String timing; // Store the selected timing
+    private Set<Integer> selectedSeats; // Track selected seats
+    private Button confirmButton; // Confirm booking button
+
+    // Modified constructor to accept the timing parameter
+    public SeatSelectionPanel(MovieTicketBookingApp app, Movie movie, String timing) {
+        this.app = app;
+        this.movie = movie;
+        this.timing = timing; // Store the timing parameter
+        this.selectedSeats = new HashSet<>(); // Initialize the set
+
+        initializeUI();
+    }
+
+    private void initializeUI() {
+        // Clear the previous layout
+        getChildren().clear();
+        setPadding(new Insets(10));
+        setVgap(10);
+        setHgap(10);
+
+        // Title display
+        Text titleText = new Text("Booking for: " + movie.getTitle() + " at " + timing);
+        add(titleText, 0, 0, 5, 1); // Span across columns
+
+        // Sample seating layout based on seats available
+        int totalSeats = movie.getSeatsAvailable(); // Use the available seats for the layout
+        int rows = (int) Math.ceil(totalSeats / 5.0); // Assuming 5 seats per row
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < 5; col++) {
+                int seatNumber = row * 5 + col; // Calculate seat number
+                if (seatNumber < totalSeats) { // Check if the seat number is within the total seats
+                    Button seatButton = createSeatButton(seatNumber);
+
+                    // Change button style for booked seats
+                    if (movie.getBookedSeats().contains(seatNumber)) {
+                        seatButton.setStyle("-fx-background-color: red;"); // Indicate booked seat
+                        seatButton.setDisable(true); // Disable booked seats
+                    }
+
+                    add(seatButton, col, row + 2); // Add seat buttons below title
+                }
+            }
+        }
+
+        // Go back button
+        Button backButton = new Button("Go Back");
+        backButton.setOnAction(e -> app.showCustomerPanel()); // Go back to customer panel
+        add(backButton, 0, rows + 2); // Add back button to the bottom left
+
+        // Confirm booking button
+        confirmButton = new Button("Confirm Booking");
+        confirmButton.setOnAction(e -> confirmBooking());
+        add(confirmButton, 1, rows + 2); // Add confirm button next to back button
+    }
+
+    private Button createSeatButton(int seatNumber) {
+        Button seatButton = new Button("Seat " + (seatNumber + 1));
+        seatButton.setPrefWidth(80); // Set a preferred width
+        seatButton.setPrefHeight(40); // Set a preferred height for uniformity
+
+        // Seat selection action
+        seatButton.setOnAction(e -> selectSeat(seatNumber, seatButton));
+
+        return seatButton;
+    }
+
+    private void selectSeat(int seatNumber, Button seatButton) {
+        if (selectedSeats.contains(seatNumber)) {
+            // Deselect the seat if it is already selected
+            selectedSeats.remove(seatNumber);
+            seatButton.setStyle(""); // Reset style to default
+        } else {
+            // Select the seat
+            selectedSeats.add(seatNumber);
+            seatButton.setStyle("-fx-background-color: green;"); // Change color to indicate selection
+        }
+    }
+
+    private void confirmBooking() {
+        if (selectedSeats.isEmpty()) {
+            showAlert("No Seats Selected", "Please select at least one seat before confirming.");
+            return;
+        }
+
+        for (int seat : selectedSeats) {
+            movie.addBookedSeat(seat); // Add selected seats to booked seats
+        }
+
+        StringBuilder bookedSeats = new StringBuilder("You have booked seats: ");
+        for (int seat : selectedSeats) {
+            bookedSeats.append(seat + 1).append(" "); // Convert to 1-based seat numbering
+        }
+
+        showAlert("Booking Confirmed", bookedSeats + "\nTiming: " + timing);
+        app.showCustomerPanel(); // Optionally return to customer panel
+        Booking newBooking = new Booking(movie, timing, new HashSet<>(selectedSeats));
+
+        // Add the booking to the customer panel
+        app.getCustomerPanel().addBooking(newBooking);
+    }
+
+
+    private void showAlert(String title, String message) {
+        // Implement an alert to show messages to the user
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+}
+
